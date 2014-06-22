@@ -1,0 +1,161 @@
+---
+title: "Predicting the Quality of Weight-Lefting Excercises"
+author: "Aous Abdo"
+date: "June 22, 2014"
+output: html_document
+---
+
+## Background 
+In this report we will try to predict the quality of an exercise performed by an athlete. The data used in this report comes from the [__Human Activity Recognition__](http://groupware.les.inf.puc-rio.br/har) project. In this study, several athletes were asked to perfrom some weight lefting exercises in 5 different ways, only one of which is the correct way of performing the lefting. The project supplied two datasets, a [training](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and [testing](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) datasets. Each of these datasets contain several recordable variables that we will use to predict the outcome `classe` which represents the class a given exercise belong to. The `classe` varibale is a factor variable with four levels A,B,C,D,E. These levels are supplied in the training dataset but not in the testing dataset. In this report we will be trying to predict the `classe` for each of the 20 observations provided in the testing dataset. 
+
+## Data Preparation
+We start by loading the required libraries and the two datasets:
+
+```{r}
+## Load libraries
+library(corrplot)
+library(caret)
+```
+
+```{r}
+## Load data sets
+testing   <- read.csv("pml-testing.csv")
+training  <- read.csv("pml-training.csv")
+dim(training)
+```
+We see that the training dataset contains 19622 observations of 160 variables. After taking a quick look at the training dataset we noticed a lot of colums with `NA` or no entries. The next code chunk gets rid of these columns:
+```{r}
+## convert empty entries into NAs so we can get rid off all of them later
+training[training==""] <- NA
+
+## Now we'll get rid of the NAs
+## vector to contain the locations of the NAs
+NAcols <- rep(FALSE, ncol(training)) ## default it to no NAs
+## Loop over the columns and flag those with lots of NAs to get rid of them in the next step
+for (i in 1:ncol(training)) {
+        if( sum(is.na(training[,i])) > 100) {
+                NAcols[i] <- TRUE
+        }
+}
+## take out variables with NAs
+training2 <- training[,!NAcols]
+```
+
+Next we'll get rid of any of the columns in the dataset that would have no affect on the outcome, columns like time, name and so forth:
+
+```{r}
+## Now the dataset has 60 columns instead of 160
+## but we still need to get rid of some unrelated columns
+## get rid of the name and index columns since they have nothing to do with the predictions
+## get rid of the "new_window" and "time_window" vars
+## get rid of the row_time_stamp vars 
+training3 <- training2[,-c(1:7)]
+dim(training3)
+```
+
+After this data cleaning our dataset contains 53 variables, down from 160. One of these variables `classe` is the outcome we are trying to predict, so the cleaned dataset contains 52 predictor variables.
+
+## Cross Validation and Training
+Fot training purposes we will be splitting the cleaned dataset in two sets, one for training and one for cross validation. 
+The cross validation dataset wil contain 30% of the cleaned training dataset and the smaller training dataset will contain the rest, 70% of the dataset. The reason for this is that after we obtain our model, we will be using the cross validation data to test the accuracy of our model. 
+
+```{r}
+## Split the cleaned training dataset in training and cross validation datasets
+inTrain <- createDataPartition(training3$classe, p = 0.01, list=FALSE)
+train_subset <- training3[inTrain,]
+crossval <- training3[-inTrain,]
+```
+
+### Correlated Variables 
+Since there are many predictor variables in this dataset, it will be a good idea to see if there are any variables that are strongly correlated. If such variables exist, we would need to exclude these variables from our training, since otherwise we might be overfitting the data. 
+
+```{r, fig.height=6.5, fig.align='center'}
+## Make a correlation matrix plot
+corMat <- cor(train_subset[,-dim(train_subset)[2]],)
+corrplot(corMat, method = "color", type="lower", order="hclust", tl.cex = 0.75, tl.col="black", tl.srt = 45)
+```
+The correlation plot above shows correlations between the variables. In this figure the darker the color, blue or red, the more correlated the two varialbes are. As one can see, there are several variables that are highly correlated and we would need to exclude them from our fit:
+
+```{r}
+## Extract highly, r > 0.5, correlated variables and take them out of the training dataset
+highlyCor <- findCorrelation(corMat, cutoff = 0.5)
+newTrain_sub <- train_subset[,-highlyCor]
+ncol(newTrain_sub)
+```
+
+As we can see, the final training dataset contains 22 variables, 21 predictor variables and one outcome `classe`.  
+Next we examine the correlation matrix in the final dataset:
+
+```{r}
+cormat <- cor(newTrain_sub[,-dim(newTrain_sub)[2]])
+corrplot(cormat, method = "color", type="lower", order="hclust", tl.cex = 0.75, tl.col="black", tl.srt = 45)
+```
+
+And we see no significant correlations between the variables in this final training dataset.
+
+## Training 
+We will be using the Random Forests algorithm to perform the training. Originally we used the `bootstrapping` option with the random forest algorithm but that proved to be very time consuming. Without any loss of accuracy, we use the cross validation method.
+
+```{r}
+modFit_sub <- train(classe~., method = "rf", data=newTrain_sub, trControl = trainControl(method = "cv"), importance=TRUE)
+```
+
+### Predicotr Importance
+In any model fitting, predictors would have differenct significances in the model, we explore that with the Variable Importance Plot:
+
+```{r}
+## variable importance plot
+varImpPlot(modFit_sub$finalModel, main = "Importance of Predictors in the Fit", pch=19, col="blue",cex=0.75, sort=TRUE, type=1)
+```
+
+The figure above shows the importance of variables in the fit: variables with higher x-axis values are more important than those with lower x-axis values. 
+
+## Model Validation on the Cross Validation Dataset
+Next we test our model on the cross validation dataset. We will use this dataset to assess the validity and accuracy of our model
+
+```{r}
+## Apply predictions
+pred_sub <- predict(modFit_sub, newdata=crossval)
+## Extract the confusion matrix to assess model validity
+confMat <- confusionMatrix(pred_sub, crossval$classe)
+confMat$table
+```
+
+To assess the accuracy of our model we compare the predicted results to the actual values in the cross validation dataset
+```{r}
+accuracy <- sum((pred_sub==crossval$classe))/dim(crossval)[1]
+```
+Our model has an accuracy of 98.5%. We could have gotten this number from the confusion matrix results
+
+The out-of-sample error is equal to the complimentary of this number, i.e. 1-0.985 = 0.015
+
+```{r}
+## out of sample error
+1-accuracy
+```
+
+So for our model, the out-of-sample error is equal to 1.5%. 
+
+## Predicting Performance on Testing Dataset
+Next we apply out model to the testing dataset:
+
+```{r}
+## Run model on the testing dataset
+answers <- predict(modFit_sub,newdata=testing)
+print(answers)
+```
+
+```{r}
+## Save the 20 files 
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_id_",i,".txt")
+                write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+}
+pml_write_files(answers)
+```
+
+## Conclusion
+We used random forests algorithm to predict the quality of perfomance of athletes. Our model had an accuracy of 98.5% and an out-of-sample error of 1.5%. After applying our model to the testing dataset and after the submission of the results to the Coursera servers we got all of the predictions correctly.
