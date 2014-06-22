@@ -125,16 +125,16 @@ To assess the accuracy of our model we compare the predicted results to the actu
 ```{r}
 accuracy <- sum((pred_sub==crossval$classe))/dim(crossval)[1]
 ```
-Our model has an accuracy of 98.5%. We could have gotten this number from the confusion matrix results
+Our model has an accuracy of `r round(accuracy*100,2)`%. We could have gotten this number from the confusion matrix results
 
-The out-of-sample error is equal to the complimentary of this number, i.e. 1-0.985 = 0.015
+The out-of-sample error is equal to the complimentary of this number, i.e. `r round(1-accuracy,2)`
 
 ```{r}
 ## out of sample error
 1-accuracy
 ```
 
-So for our model, the out-of-sample error is equal to 1.5%. 
+So for our model, the out-of-sample error is equal to `r round((1-accuracy)*100,2)`%. 
 
 ## Predicting Performance on Testing Dataset
 Next we apply out model to the testing dataset:
@@ -158,4 +158,4 @@ pml_write_files(answers)
 ```
 
 ## Conclusion
-We used random forests algorithm to predict the quality of perfomance of athletes. Our model had an accuracy of 98.5% and an out-of-sample error of 1.5%. After applying our model to the testing dataset and after the submission of the results to the Coursera servers we got all of the predictions correctly.
+We used random forests algorithm to predict the quality of perfomance of athletes. Our model had an accuracy of `r round(accuracy*100,2)`% and an out-of-sample error of `r round((1-accuracy)*100,2)`%. After applying our model to the testing dataset and after the submission of the results to the Coursera servers we got all of the predictions correctly.
