@@ -61,7 +61,7 @@ The cross validation dataset wil contain 30% of the cleaned training dataset and
 
 ```{r}
 ## Split the cleaned training dataset in training and cross validation datasets
-inTrain <- createDataPartition(training3$classe, p = 0.01, list=FALSE)
+inTrain <- createDataPartition(training3$classe, p = 0.7, list=FALSE)
 train_subset <- training3[inTrain,]
 crossval <- training3[-inTrain,]
 ```
